@@ -45,12 +45,14 @@ public class Channel {
     gRPC.initialize()
     host = address
     let argumentWrappers = arguments.map { $0.toCArg() }
-    var argumentValues = argumentWrappers.map { $0.wrapped }
 
-    if secure {
-      underlyingChannel = cgrpc_channel_create_secure(address, roots_pem(), nil, nil, &argumentValues, Int32(arguments.count))
-    } else {
-      underlyingChannel = cgrpc_channel_create(address, &argumentValues, Int32(arguments.count))
+    underlyingChannel = withExtendedLifetime(argumentWrappers) {
+        var argumentValues = argumentWrappers.map { $0.wrapped }
+        if secure {
+          return cgrpc_channel_create_secure(address, roots_pem(), nil, nil, &argumentValues, Int32(arguments.count))
+        } else {
+          return cgrpc_channel_create(address, &argumentValues, Int32(arguments.count))
+        }
     }
     completionQueue = CompletionQueue(underlyingCompletionQueue: cgrpc_channel_completion_queue(underlyingChannel), name: "Client")
     completionQueue.run() // start a loop that watches the channel's completion queue
@@ -64,9 +66,11 @@ public class Channel {
     gRPC.initialize()
     host = googleAddress
     let argumentWrappers = arguments.map { $0.toCArg() }
-    var argumentValues = argumentWrappers.map { $0.wrapped }
-
-    underlyingChannel = cgrpc_channel_create_google(googleAddress, &argumentValues, Int32(arguments.count))
+    
+    underlyingChannel = withExtendedLifetime(argumentWrappers) {
+        var argumentValues = argumentWrappers.map { $0.wrapped }
+        return cgrpc_channel_create_google(googleAddress, &argumentValues, Int32(arguments.count))
+    }
 
     completionQueue = CompletionQueue(underlyingCompletionQueue: cgrpc_channel_completion_queue(underlyingChannel), name: "Client")
     completionQueue.run() // start a loop that watches the channel's completion queue
@@ -75,17 +79,19 @@ public class Channel {
   /// Initializes a gRPC channel
   ///
   /// - Parameter address: the address of the server to be called
-  /// - Parameter certificates: a PEM representation of certificates to use
+  /// - Parameter certificates: a PEM representation of certificates to use.
   /// - Parameter clientCertificates: a PEM representation of the client certificates to use
   /// - Parameter clientKey: a PEM representation of the client key to use
   /// - Parameter arguments: list of channel configuration options
-  public init(address: String, certificates: String, clientCertificates: String? = nil, clientKey: String? = nil, arguments: [Argument] = []) {
+  public init(address: String, certificates: String = roots_pem(), clientCertificates: String? = nil, clientKey: String? = nil, arguments: [Argument] = []) {
     gRPC.initialize()
     host = address
     let argumentWrappers = arguments.map { $0.toCArg() }
-    var argumentValues = argumentWrappers.map { $0.wrapped }
 
-    underlyingChannel = cgrpc_channel_create_secure(address, certificates, clientCertificates, clientKey, &argumentValues, Int32(arguments.count))
+    underlyingChannel = withExtendedLifetime(argumentWrappers) {
+        var argumentValues = argumentWrappers.map { $0.wrapped }
+        return cgrpc_channel_create_secure(address, certificates, clientCertificates, clientKey, &argumentValues, Int32(arguments.count))
+    }
     completionQueue = CompletionQueue(underlyingCompletionQueue: cgrpc_channel_completion_queue(underlyingChannel), name: "Client")
     completionQueue.run() // start a loop that watches the channel's completion queue
   }
